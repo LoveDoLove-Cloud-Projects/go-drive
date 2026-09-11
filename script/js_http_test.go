@@ -338,18 +338,12 @@ func TestHTTPRejectsNegativeTimeout(t *testing.T) {
 }
 
 func TestHTTPUploadReportsTaskProgress(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
-		}
-		_, _ = io.Copy(io.Discard, r.Body)
-	}))
-	t.Cleanup(srv.Close)
+	srv, _ := startCaptureServer(t)
 
 	vm := newScriptTestVM(t)
 	mustDefineGlobal(t, vm, "url", srv.URL)
-	mustDefineGlobal(t, vm, "payload", bytes.Repeat([]byte("x"), 2<<20))
+	payloadSize := 2 << 20
+	mustDefineGlobal(t, vm, "payload", bytes.Repeat([]byte("x"), payloadSize))
 	tc := task.NewTaskContext(context.Background())
 	if _, e := vm.Run(tc, `
 			var plain = new TempFile();
@@ -376,8 +370,8 @@ func TestHTTPUploadReportsTaskProgress(t *testing.T) {
 	`, ""); e != nil {
 		t.Fatal(e)
 	}
-	if tc.GetProgress() < 1 {
-		t.Fatalf("upload progress = %d, want at least 1", tc.GetProgress())
+	if got := tc.GetProgress(); got != int64(payloadSize) {
+		t.Fatalf("upload progress = %d, want %d", got, payloadSize)
 	}
 }
 
